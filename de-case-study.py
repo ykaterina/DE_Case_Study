@@ -7,7 +7,6 @@ from psycopg2.extras import execute_values
 def extract_principal_fund_available():
   folderpath = '~/Documents/PYTHON/Xelure_Case_Study/Xelure Assessment/DE_Citi_Certificate Holders Statement/'
   files = os.listdir(os.path.expanduser(folderpath))
-  num_files = 0
   data = []
 
   for f in files:
@@ -37,10 +36,7 @@ def extract_principal_fund_available():
           ))
 
   conn = psycopg2.connect(
-      database="catherinebarrientos",
-      user='catherinebarrientos',
-      host='localhost',
-      port='5432'
+      
   )
 
   cursor = conn.cursor()
@@ -54,5 +50,6 @@ def extract_principal_fund_available():
 
   execute_values(cursor, insertQuery, data)
   conn.commit()
-
+  conn.close()
+  
 extract_principal_fund_available()
