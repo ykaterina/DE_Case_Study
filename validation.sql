@@ -1,4 +1,4 @@
-with loanlevel AS (
+WITH loanlevel AS (
 	SELECT ell.distributiondate, 
             ROUND(CAST(SUM(scheduledprincipal) AS numeric),2) AS scheduledprincipal,
             ROUND(CAST(sum(curtailments) AS numeric), 2) AS curtailments,
