@@ -1,64 +1,69 @@
-import tabula
 import pandas as pd
 import os
 import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import dotenv_values
 from sqlalchemy import create_engine
+from pypdf import PdfReader 
 
 config = dotenv_values()
 database = config.get("DATABASE")
 user = config.get("USER")
 password = config.get("PASSWORD")
 
+def extract_page_from_pdf(file, pagenum):
+    reader = PdfReader(file) 
+    
+    page = reader.pages[pagenum] 
+
+    content = page.extract_text()
+    contentlist = content.splitlines()
+
+    res = [i for i in contentlist if "Total Principal Funds Available" in i]
+    value = None
+    if len(res) > 0:
+        value = res[0].split("Available:", 1)[1].strip()
+ 
+    return value
 
 def extract_principal_fund_available():
     folderpath = '~/Documents/PYTHON/Xelure_Case_Study/Xelure Assessment/DE_Citi_Certificate Holders Statement/'
     files = os.listdir(os.path.expanduser(folderpath))
+    fullpath = os.path.expanduser(folderpath)
     data = []
 
+    conn = psycopg2.connect(
+                host="localhost",
+                database=database,
+                user=user,
+            )
+
+    cursor = conn.cursor()
     for f in files:
         if f.endswith('.pdf'):
             filenamelen = len(f)
             date = f'20{f[len(f)-8:filenamelen-4]}'
-            df = tabula.io.read_pdf(
-                folderpath + f, pages=6, columns=[0, 4], force_subprocess=True, multiple_tables=True, pandas_options={'header': None})
 
-            if isinstance(df, list):
-                if len(df) > 0:
-                    if isinstance(df[0], pd.DataFrame):
-                        df = df[0]
-                    else:
-                        raise ValueError("Unexpected data format in list.")
-                else:
-                    raise ValueError("Empty list returned.")
-            else:
-                raise ValueError("Unexpected data type returned.")
+            total_principal_funds_available = extract_page_from_pdf(fullpath + f, 5)
+            ctr = 0
+            while(total_principal_funds_available is None):
+                total_principal_funds_available = extract_page_from_pdf(fullpath + f, ctr)
+                ctr = ctr + 1
+                
+            # print('total_principal_funds_available',total_principal_funds_available)
+            data.append((date, total_principal_funds_available.replace(',','')))
 
-            # column containing total_principal_funds_available
-            column4 = df[3].replace(',', '', regex=True).astype(float)
-            total_principal_funds_available = column4.iloc[18]
-            data.append((
-                date,
-                total_principal_funds_available
-            ))
+            
+            insertQuery = """
+            INSERT INTO certificate_holders_smt (date, total_principal_funds_available)
+            VALUES %s
 
-    conn = psycopg2.connect(
-        host="localhost",
-        database=database,
-        user=user,
-    )
+            ON CONFLICT (date)
+            DO NOTHING"""
 
-    cursor = conn.cursor()
-    insertQuery = """
-    INSERT INTO certificate_holders_smt (date, total_principal_funds_available)
-    VALUES %s
-    
-    ON CONFLICT (date)
-    DO NOTHING"""
+            execute_values(cursor, insertQuery, data)
+            conn.commit()
 
-    execute_values(cursor, insertQuery, data)
-    conn.commit()
     conn.close()
 
 
@@ -67,29 +72,25 @@ def get_loan_level_data():
         '~/Documents/PYTHON/Xelure_Case_Study/Xelure Assessment/DE_Citi_Loan Level Data/')
     files = os.listdir(folderpath)
 
-    conn = psycopg2.connect(
-        host="localhost",
-        database=database,
-        user=user,
-    )
-    cursor = conn.cursor()
-
     # logging.basicConfig()
     # logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
     engine = create_engine(
         f"postgresql://{user}:{password}@localhost:5432/{database}")
     for f in files:
         csv_path = folderpath + f
-
+        filenamelen = len(f)
+        date = f'20{f[len(f)-8:filenamelen-4]}'
         if f.endswith('.csv'):
-            tablename = f.replace('.csv', '').lower()
-
             df = pd.read_csv(csv_path)
             df.columns = [x.lower().replace(' ', '').replace('#', 'no').replace('&', 'and')
                           .replace(',', '').replace('/', '').replace('%', 'perc')
                           for x in df.columns]
+            df.insert(0, 'yyyymm',date)
 
-            df.to_sql(tablename, engine, if_exists='replace',
+            if 'dealid' not in df.columns:
+                df.insert(1, 'dealid', None)
+
+            df.to_sql('loanleveldata', engine, if_exists='replace',
                       index=False)
 
 
@@ -102,15 +103,12 @@ def get_loan_detail_cml():
         f"postgresql://{user}:{password}@localhost:5432/{database}")
     for f in files:
         csv_path = folderpath + f
-
         if f.endswith('.csv'):
-            tablename = f.replace('.csv', '').lower()
-
             df = pd.read_csv(csv_path)
             df.columns = [x.lower().replace(' ', '').replace(
                 '#', 'no').replace('/', '') for x in df.columns]
 
-            df.to_sql(tablename, engine, if_exists='replace',
+            df.to_sql('enhancedloanleveldata', engine, if_exists='append',
                       index=False)
 
 
