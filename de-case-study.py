@@ -5,6 +5,7 @@ from psycopg2.extras import execute_values
 from dotenv import dotenv_values
 from sqlalchemy import create_engine
 from pypdf import PdfReader 
+import logging
 
 config = dotenv_values()
 database = config.get("DATABASE")
@@ -27,7 +28,7 @@ def extract_page_from_pdf(file, pagenum):
     return value
 
 def extract_principal_fund_available():
-    folderpath = '~/Documents/PYTHON/Xelure_Case_Study/Xelure Assessment/DE_Citi_Certificate Holders Statement/'
+    folderpath = '~/Documents/PYTHON/DE_Case_Study/Case_Study_Files/DE_Citi_Certificate Holders Statement/'
     files = os.listdir(os.path.expanduser(folderpath))
     fullpath = os.path.expanduser(folderpath)
     data = []
@@ -69,7 +70,7 @@ def extract_principal_fund_available():
 
 def get_loan_level_data():
     folderpath = os.path.expanduser(
-        '~/Documents/PYTHON/Xelure_Case_Study/Xelure Assessment/DE_Citi_Loan Level Data/')
+        '~/Documents/PYTHON/DE_Case_Study/Case_Study_Files/DE_Citi_Loan Level Data/')
     files = os.listdir(folderpath)
 
     # logging.basicConfig()
@@ -96,9 +97,11 @@ def get_loan_level_data():
 
 def get_loan_detail_cml():
     folderpath = os.path.expanduser(
-        '~/Documents/PYTHON/Xelure_Case_Study/Xelure Assessment/DE_Citi_Enhanced_Loan_Level_Data/')
+        '~/Documents/PYTHON/DE_Case_Study/Case_Study_Files/DE_Citi_Enhanced_Loan_Level_Data/')
     files = os.listdir(folderpath)
 
+    # logging.basicConfig()
+    # logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
     engine = create_engine(
         f"postgresql://{user}:{password}@localhost:5432/{database}")
     for f in files:
